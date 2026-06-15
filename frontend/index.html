@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>SMARTVIAL - Prototipo</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <link rel="stylesheet" href="/assets/design-system.css">
+</head>
+<body>
+  <div id="app" class="container-fluid p-3">
+    <nav class="navbar navbar-expand-lg" :class="['bg-light','mb-3']">
+      <div class="container-fluid">
+        <a class="navbar-brand" href="#">SMARTVIAL</a>
+        <div class="d-flex">
+          <button class="btn btn-outline-primary me-2" v-if="!token" @click="view='login'">Iniciar sesión</button>
+          <div v-else>
+            <span class="me-2">{{userName}}</span>
+            <button class="btn btn-sm btn-danger" @click="logout">Cerrar</button>
+          </div>
+        </div>
+      </div>
+    </nav>
+
+    <div v-if="view==='login'" class="row justify-content-center">
+      <div class="col-md-4">
+        <div class="card p-3">
+          <h5>Iniciar sesión</h5>
+          <div class="mb-2"><input v-model="loginForm.username" class="form-control" placeholder="Usuario"></div>
+          <div class="mb-2"><input v-model="loginForm.password" type="password" class="form-control" placeholder="Contraseña"></div>
+          <button class="btn btn-primary" @click="login">Entrar</button>
+        </div>
+      </div>
+    </div>
+
+    <div v-if="view==='dashboard'">
+      <div class="row mb-3">
+        <div class="col-md-3" v-for="kpi in kpis" :key="kpi.label">
+          <div class="card p-3">
+            <div class="h6">{{kpi.label}}</div>
+            <div class="display-6">{{kpi.value}}</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="col-md-6">
+          <div id="map" style="height:480px;"></div>
+        </div>
+        <div class="col-md-6">
+          <h5>Incidentes recientes</h5>
+          <ul class="list-group">
+            <li class="list-group-item" v-for="inc in incidents" :key="inc.id">
+              <div class="fw-bold">{{inc.incident_code}} — {{inc.type}}</div>
+              <div>{{inc.occurred_at}} — Severidad: {{inc.severity}}</div>
+            </li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script>
+  const { createApp } = Vue;
+  // API base (backend local)
+  const API_BASE = 'http://localhost:4000';
+
+  createApp({
+      data(){
+        return {
+          view: localStorage.getItem('sv_token')? 'dashboard' : 'login',
+          token: localStorage.getItem('sv_token') || null,
+          userName: localStorage.getItem('sv_user') || '',
+          loginForm: { username:'agent1', password:'agentpass' },
+          kpis: [ {label:'Incidentes hoy', value:0}, {label:'Pendientes', value:0}, {label:'Alta severidad', value:0} ],
+          incidents: [],
+          map: null,
+          markers: []
+        }
+      },
+      methods:{
+        async login(){
+          try{
+            const res = await fetch(API_BASE + '/api/auth/login',{ method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(this.loginForm) });
+            const j = await res.json();
+            if (j.token){
+              this.token = j.token;
+              localStorage.setItem('sv_token', j.token);
+              localStorage.setItem('sv_user', this.loginForm.username);
+              this.userName = this.loginForm.username;
+              this.view='dashboard';
+              this.loadIncidents();
+            } else {
+              alert('Login failed');
+            }
+          }catch(e){ alert('Error auth'); }
+        },
+        logout(){ localStorage.removeItem('sv_token'); localStorage.removeItem('sv_user'); this.token=null; this.view='login'; },
+        async loadIncidents(){
+          try{
+            const res = await fetch(API_BASE + '/api/incidents',{ headers: { 'Authorization': 'Bearer '+this.token } });
+            const j = await res.json();
+            this.incidents = j.data || [];
+            this.kpis[0].value = this.incidents.length;
+            this.renderMap();
+          }catch(e){ console.error(e); }
+        },
+        renderMap(){
+          if (!this.map){
+            this.map = L.map('map').setView([13.7, -89.2], 10);
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '© OpenStreetMap contributors' }).addTo(this.map);
+          }
+          this.markers.forEach(m=>this.map.removeLayer(m)); this.markers=[];
+          this.incidents.forEach(i=>{
+            if (i.latitude && i.longitude){
+              const m = L.marker([i.latitude, i.longitude]).addTo(this.map).bindPopup(`<b>${i.incident_code}</b><br/>${i.type}`);
+              this.markers.push(m);
+            }
+          });
+        }
+      },
+      mounted(){ if (this.view==='dashboard') this.loadIncidents(); }
+    }).mount('#app')
+  </script>
+</body>
+</html>

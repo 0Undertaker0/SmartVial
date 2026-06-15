@@ -1,0 +1,10 @@
+:root{
+  --sv-primary: #0b5ed7;
+  --sv-secondary: #0a76d0;
+  --sv-accent: #28a745;
+  --sv-bg: #f8f9fa;
+  --sv-surface: #ffffff;
+}
+body{ background: var(--sv-bg); font-family: Inter, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial }
+.navbar-brand{ color: var(--sv-primary); font-weight:700 }
+.card{ border-radius:8px }
